@@ -1,32 +1,13 @@
-<!DOCTYPE html>
-<html>
-
-<head>
-    <title>Socket.IO Chat</title>
-    <script src="/socket.io/socket.io.js"></script>
-</head>
-
-<body>
-    <h1>Socket.IO Chat</h1>
-    <div id="messages"></div>
-    <input id="messageInput" autocomplete="off" />
-    <button id="sendButton">Send</button>
-
-    <script>
-        var socket = io();
-
-        document.getElementById('sendButton').addEventListener('click', function () {
-            var message = document.getElementById('messageInput').value;
-            socket.emit('chat message', message);
-            document.getElementById('messageInput').value = '';
-        });
-
-        socket.on('chat message', function (msg) {
-            var messageDiv = document.createElement('div');
-            messageDiv.textContent = msg;
-            document.getElementById('messages').appendChild(messageDiv);
-        });
-    </script>
-</body>
-
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vite + React</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
 </html>

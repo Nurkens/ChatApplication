@@ -1,6 +1,5 @@
 import jwt from 'jsonwebtoken';
 
-
 const generateRefreshToken = (user) =>{
     return jwt.sign(
         {userId:user._id,username:user.username},
