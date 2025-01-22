@@ -1,4 +1,4 @@
-
+import tokenController from "./tokenController.js";
 import User from "../models/User.js";
 import bcrypt from "bcrypt";
 import validator from "validator";
@@ -10,17 +10,8 @@ class authController {
     async signup(req, res) {
         try {
             const { fullName, email, password } = req.body;
-
-            if (!fullName || !email || !password) {
-                return res.status(400).json({ message: "All fields are required" });
-            }
-
-            if (password.length < 6) {
-                return res.status(400).json({ message: "Password must be at least 6 characters" });
-            }
-
-            if (!validator.isEmail(email)) {
-                return res.status(400).json({ message: "Invalid email format" });
+            if (!fullName || !email || !password || password.length < 6 || !validator.isEmail(email)) {
+                return res.status(400).json({ message: "Invalid input" });
             }
 
             const existingUser = await User.findOne({ email });
@@ -29,73 +20,90 @@ class authController {
             }
 
             const hashedPassword = await bcrypt.hash(password, 10);
+            const newUser = await User.create({ fullName, email, password: hashedPassword });
 
-            const newUser = new User({
-                fullName,
-                email,
-                password: hashedPassword,
+            const tokens = tokenController.generateTokens({ userId: newUser._id });
+            await tokenController.saveToken(newUser._id, tokens.refreshToken);
+
+            res.cookie("refreshToken", tokens.refreshToken, {
+                maxAge: 7 * 24 * 60 * 60 * 1000,
+                httpOnly: true,
             });
 
-            await newUser.save();
-
-            const accessToken = generateAccessToken(newUser);
-            const refreshToken = generateRefreshToken(newUser);
-
-            res.status(201).json({
+            return res.status(201).json({
                 message: "User created successfully",
-                user: {
-                    _id: newUser._id,
-                    fullName: newUser.fullName,
-                    email: newUser.email,
-                    profilePic: newUser.profilePic,
-                },
-                accessToken,
-                refreshToken
+                user: { _id: newUser._id, fullName: newUser.fullName, email: newUser.email },
+                accessToken: tokens.accessToken,
             });
         } catch (e) {
             console.error(e);
-            return res.status(500).json({ message: "Internal Server Error", error: e.message });
+            return res.status(500).json({ message: "Internal Server Error" });
         }
     }
 
     async login(req, res) {
         try {
             const { email, password } = req.body;
-
             const user = await User.findOne({ email });
-            if (!user) {
+            if (!user || !(await bcrypt.compare(password, user.password))) {
                 return res.status(400).json({ message: "Invalid credentials" });
             }
 
-            const isPasswordCorrect = await bcrypt.compare(password, user.password);
-            if (!isPasswordCorrect) {
-                return res.status(400).json({ message: "Invalid credentials" });
-            }
+            const tokens = tokenController.generateTokens({ userId: user._id });
+            await tokenController.saveToken(user._id, tokens.refreshToken);
 
-            const accessToken = generateAccessToken(user);
-            const refreshToken = generateRefreshToken(user);
+            res.cookie("refreshToken", tokens.refreshToken, {
+                maxAge: 7 * 24 * 60 * 60 * 1000,
+                httpOnly: true,
+            });
 
-            res.status(200).json({
-                _id: user._id,
-                fullName: user.fullName,
-                email: user.email,
-                profilePic: user.profilePic,
-                accessToken,
-                refreshToken
+            return res.status(200).json({
+                user: { _id: user._id, fullName: user.fullName, email: user.email },
+                accessToken: tokens.accessToken,
             });
         } catch (e) {
             console.error(e);
-            return res.status(500).json({ message: "Internal Server Error", error: e.message });
+            return res.status(500).json({ message: "Internal Server Error" });
         }
     }
 
     async logout(req, res) {
         try {
-            res.cookie("jwt", "", { maxAge: 0 });
-            res.status(200).json({ message: "Logged out successfully" });
+            const { refreshToken } = req.cookies;
+            await tokenController.removeToken(refreshToken);
+            res.clearCookie("refreshToken");
+            return res.status(200).json({ message: "Logged out successfully" });
         } catch (e) {
             console.error(e);
-            return res.status(500).json({ message: "Internal Server Error", error: e.message });
+            return res.status(500).json({ message: "Internal Server Error" });
+        }
+    }
+
+    async refreshToken(req, res) {
+        try {
+            const { refreshToken } = req.cookies;
+            if (!refreshToken) {
+                return res.status(401).json({ message: "Unauthorized" });
+            }
+
+            const userData = tokenController.validateRefreshToken(refreshToken);
+            const tokenFromDb = await tokenController.findToken(refreshToken);
+            if (!userData || !tokenFromDb) {
+                return res.status(401).json({ message: "Invalid or expired refresh token" });
+            }
+
+            const newTokens = tokenController.generateTokens({ userId: userData.userId });
+            await tokenController.saveToken(userData.userId, newTokens.refreshToken);
+
+            res.cookie("refreshToken", newTokens.refreshToken, {
+                maxAge: 7 * 24 * 60 * 60 * 1000,
+                httpOnly: true,
+            });
+
+            return res.status(200).json({ accessToken: newTokens.accessToken });
+        } catch (e) {
+            console.error(e);
+            return res.status(500).json({ message: "Internal Server Error" });
         }
     }
 
@@ -136,6 +144,8 @@ class authController {
             return res.status(500).json({ message: "Internal Server Error" });
         }
     }
+   
+
 }
 
 export default new authController();

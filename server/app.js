@@ -6,6 +6,7 @@ import { Server as SocketIO } from 'socket.io';
 import router from './routes/authRoutes.js'; 
 import routerRoom from './routes/roomRoutes.js';
 import routerMessage from './routes/messageRoutes.js';
+import cookieParser from 'cookie-parser';
 
 dotenv.config();
 
@@ -20,12 +21,14 @@ const server = app.listen(PORT, () => {
 const io = new SocketIO(server);
 
 app.use(cors({
-    origin: "http://localhost:5173",
+    origin: "http://localhost:3000",
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE"],
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(cookieParser());
 app.use('/api/auth', router); 
 app.use('/api/room', routerRoom); 
 app.use('/api/message', routerMessage); 
