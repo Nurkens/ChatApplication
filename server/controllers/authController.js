@@ -5,18 +5,19 @@ import validator from "validator";
 import generateAccessToken from "../utils/accessToken.js";
 import generateRefreshToken from "../utils/refreshToken.js";
 import cloudinary from "../utils/cloudinary.js";
-
+import ApiError from "../exceptions/api-error.js";
 class authController {
     async signup(req, res) {
         try {
             const { fullName, email, password } = req.body;
+            
             if (!fullName || !email || !password || password.length < 6 || !validator.isEmail(email)) {
-                return res.status(400).json({ message: "Invalid input" });
+                throw ApiError.BadRequest("Invalid input");
             }
 
             const existingUser = await User.findOne({ email });
             if (existingUser) {
-                return res.status(400).json({ message: "Email already exists" });
+                throw ApiError.BadRequest("Email already exists");
             }
 
             const hashedPassword = await bcrypt.hash(password, 10);
@@ -25,21 +26,24 @@ class authController {
             const tokens = tokenController.generateTokens({ userId: newUser._id });
             await tokenController.saveToken(newUser._id, tokens.refreshToken);
 
-            res.cookie("refreshToken", tokens.refreshToken, {
-                maxAge: 7 * 24 * 60 * 60 * 1000,
-                httpOnly: true,
-            });
-
+            res.cookie("refreshToken", tokens.refreshToken, { maxAge: 30 * 24 * 60 * 60 * 1000, httpOnly: true });
             return res.status(201).json({
-                message: "User created successfully",
                 user: { _id: newUser._id, fullName: newUser.fullName, email: newUser.email },
                 accessToken: tokens.accessToken,
+                refreshToken: tokens.refreshToken
             });
+
         } catch (e) {
             console.error(e);
+
+            if (e instanceof ApiError) {
+                return res.status(e.status).json({ message: e.message, errors: e.errors });
+            }
+
             return res.status(500).json({ message: "Internal Server Error" });
         }
     }
+
 
     async login(req, res) {
         try {
@@ -79,33 +83,35 @@ class authController {
         }
     }
 
+    
     async refreshToken(req, res) {
-        try {
-            const { refreshToken } = req.cookies;
-            if (!refreshToken) {
-                return res.status(401).json({ message: "Unauthorized" });
-            }
-
-            const userData = tokenController.validateRefreshToken(refreshToken);
-            const tokenFromDb = await tokenController.findToken(refreshToken);
-            if (!userData || !tokenFromDb) {
-                return res.status(401).json({ message: "Invalid or expired refresh token" });
-            }
-
-            const newTokens = tokenController.generateTokens({ userId: userData.userId });
-            await tokenController.saveToken(userData.userId, newTokens.refreshToken);
-
-            res.cookie("refreshToken", newTokens.refreshToken, {
-                maxAge: 7 * 24 * 60 * 60 * 1000,
-                httpOnly: true,
-            });
-
-            return res.status(200).json({ accessToken: newTokens.accessToken });
-        } catch (e) {
-            console.error(e);
-            return res.status(500).json({ message: "Internal Server Error" });
+    try {
+        const { refreshToken } = req.cookies; 
+        if (!refreshToken) {
+        return res.status(401).json({ message: "Unauthorized - No Refresh Token" });
         }
+
+        const userData = tokenController.validateRefreshToken(refreshToken);
+        const tokenFromDb = await tokenController.findToken(refreshToken);
+        if (!userData || !tokenFromDb) {
+        return res.status(401).json({ message: "Invalid or expired refresh token" });
+        }
+
+        const newTokens = tokenController.generateTokens({ userId: userData.userId });
+        await tokenController.saveToken(userData.userId, newTokens.refreshToken);
+
+        res.cookie("refreshToken", newTokens.refreshToken, {
+        maxAge: 7 * 24 * 60 * 60 * 1000, 
+        httpOnly: true, 
+        });
+
+        return res.status(200).json({ accessToken: newTokens.accessToken });
+    } catch (e) {
+        console.error(e);
+        return res.status(500).json({ message: "Internal Server Error" });
     }
+    }
+
 
     async updateProfile(req, res) {
         try {

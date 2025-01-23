@@ -7,7 +7,7 @@ import router from './routes/authRoutes.js';
 import routerRoom from './routes/roomRoutes.js';
 import routerMessage from './routes/messageRoutes.js';
 import cookieParser from 'cookie-parser';
-
+import errorMiddleware from './middleware/error-middleware.js';
 dotenv.config();
 
 const PORT = process.env.PORT;
@@ -24,15 +24,16 @@ app.use(cors({
     origin: "http://localhost:3000",
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
 }));
 
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json());
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cookieParser());
 app.use('/api/auth', router); 
 app.use('/api/room', routerRoom); 
 app.use('/api/message', routerMessage); 
-
+app.use(errorMiddleware);
 app.set("socketIO", io);
 
 mongoose.connect(process.env.MONGO_URL, {

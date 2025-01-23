@@ -3,15 +3,24 @@ import User from "../models/User.js";
 
 const authMiddleware = async (req, res, next) => {
   try {
-    const token = req.cookies.jwt || req.headers.authorization?.split(' ')[1]; 
+    const token = req.cookies.jwt || req.headers.authorization?.split(" ")[1]; 
 
     if (!token) {
       return res.status(401).json({ message: "Unauthorized - No Token Provided" });
     }
 
-    const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+    } catch (error) {
+      if (error.name === "TokenExpiredError") {
+        return res.status(401).json({ message: "Unauthorized - Token Expired" });
+      }
+      throw error;
+    }
+
     if (!decoded?.userId) {
-        return res.status(401).json({ message: "Unauthorized - Invalid Token" });
+      return res.status(401).json({ message: "Unauthorized - Invalid Token" });
     }
 
     const user = await User.findById(decoded.userId).select("-password");
@@ -26,6 +35,5 @@ const authMiddleware = async (req, res, next) => {
     return res.status(401).json({ message: "Unauthorized" });
   }
 };
-
 
 export default authMiddleware;
