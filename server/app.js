@@ -1,46 +1,51 @@
-import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import mongoose from 'mongoose';
-import { Server as SocketIO } from 'socket.io';
-import router from './routes/authRoutes.js'; 
-import routerRoom from './routes/roomRoutes.js';
-import routerMessage from './routes/messageRoutes.js';
-import cookieParser from 'cookie-parser';
-import errorMiddleware from './middleware/error-middleware.js';
+import express from "express";
+import dotenv from "dotenv";
+import cookieParser from "cookie-parser";
+import cors from "cors";
+import mongoose from "mongoose";
+import path from "path";
+
+import authRoutes from "./routes/authRoutes.js";
+import messageRoutes from "./routes/messageRoutes.js";
+import {app,server} from './utils/socket.js';
 dotenv.config();
 
-const PORT = process.env.PORT;
+const PORT = process.env.PORT || 5000;
+const __dirname = path.resolve();
 
 const app = express();
 
-const server = app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-});
-
-const io = new SocketIO(server);
-
-app.use(cors({
+app.use(express.json());
+app.use(cookieParser());
+app.use(
+  cors({
     origin: "http://localhost:3000",
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-}));
+  })
+);
 
-app.use(express.json());
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
-app.use(cookieParser());
-app.use('/api/auth', router); 
-app.use('/api/room', routerRoom); 
-app.use('/api/message', routerMessage); 
-app.use(errorMiddleware);
-app.set("socketIO", io);
+app.use("/api/auth", authRoutes);
+app.use("/api/messages", messageRoutes);
 
-mongoose.connect(process.env.MONGO_URL, {
-    
-    
-}).then(() => {
-    console.log("Connected to MongoDB");
-}).catch((e) => {
-    console.log(e);
-});
+if (process.env.NODE_ENV === "production") {
+  app.use(express.static(path.join(__dirname, "../frontend/dist")));
+
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(__dirname, "../frontend", "dist", "index.html"));
+  });
+}
+
+const startServer = async () => {
+  try {
+    await mongoose.connect(process.env.MONGODB_URI);
+
+    app.listen(PORT, () => {
+      console.log(`Server is running on PORT: ${PORT}`);
+    });
+  } catch (error) {
+    console.error("Failed to start the server:", error.message);
+    process.exit(1);
+  }
+};
+
+startServer();
