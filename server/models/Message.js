@@ -17,17 +17,15 @@ const messageSchema = new mongoose.Schema(
             ref:'Room',
             required:false
         },
-        message:{
+        text:{
             type:String,
-            required:true,
-            trim:true
-        },
-        messageType:{
-            type:String,
-            enum:['text','image','file'],
-            default:'text',
 
         },
+        image:{
+            type:String,
+
+        },
+        
         timestamp:{
             type:Date,
             default:Date.now,
